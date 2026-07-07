@@ -36,7 +36,7 @@ async function initDb(retries = 10, delayMs = 3000) {
 }
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'backend', env: process.env.ENVIRONMENT || 'unknown', version: 'v2' });
+  res.json({ status: 'ok', service: 'backend', env: process.env.ENVIRONMENT || 'unknown', version: 'v3' });
 });
 
 app.get('/items', async (req, res) => {
