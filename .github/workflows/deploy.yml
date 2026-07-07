@@ -13,6 +13,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Debug - show working directory contents
+        run: |
+          pwd
+          ls -la
+
       - name: Build image inside minikube's Docker daemon
         run: |
           eval $(minikube docker-env)
