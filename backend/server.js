@@ -1,10 +1,48 @@
 const express = require('express');
 const { Pool } = require('pg');
+const client = require('prom-client');
 
 const app = express();
 app.use(express.json());
 
 const port = process.env.PORT || 8080;
+
+// --- Prometheus metrics setup ---
+const register = new client.Registry();
+client.collectDefaultMetrics({ register }); // CPU/memory/event-loop metrics for the Node process itself
+
+const httpRequestCounter = new client.Counter({
+  name: 'http_requests_total',
+  help: 'Total number of HTTP requests',
+  labelNames: ['method', 'route', 'status_code'],
+  registers: [register],
+});
+
+const httpRequestDuration = new client.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'Duration of HTTP requests in seconds',
+  labelNames: ['method', 'route', 'status_code'],
+  buckets: [0.01, 0.05, 0.1, 0.3, 0.5, 1, 2, 5],
+  registers: [register],
+});
+
+// Middleware to record metrics for every request
+app.use((req, res, next) => {
+  const endTimer = httpRequestDuration.startTimer();
+  res.on('finish', () => {
+    const route = req.route ? req.route.path : req.path;
+    const labels = { method: req.method, route, status_code: res.statusCode };
+    httpRequestCounter.inc(labels);
+    endTimer(labels);
+  });
+  next();
+});
+
+app.get('/metrics', async (req, res) => {
+  res.set('Content-Type', register.contentType);
+  res.end(await register.metrics());
+});
+// --- end Prometheus metrics setup ---
 
 const pool = new Pool({
   host: process.env.DB_HOST || 'postgres',
@@ -36,7 +74,7 @@ async function initDb(retries = 10, delayMs = 3000) {
 }
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', service: 'backend', env: process.env.ENVIRONMENT || 'unknown', version: 'v3' });
+  res.json({ status: 'ok', service: 'backend', env: process.env.ENVIRONMENT || 'unknown' });
 });
 
 app.get('/items', async (req, res) => {
